@@ -1,0 +1,200 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>MainWindow</class>
+ <widget class="QMainWindow" name="MainWindow">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>900</width>
+    <height>600</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>Device Management Dashboard</string>
+  </property>
+  <property name="styleSheet">
+   <string notr="true">
+    QMainWindow {
+        background-color: #2c3e50;
+    }
+    QWidget {
+        color: #ecf0f1;
+        font-family: 'Segoe UI', sans-serif;
+    }
+    /* Table Styling */
+    QTableWidget {
+        background-color: #34495e;
+        gridline-color: #7f8c8d;
+        color: #ecf0f1;
+        border: none;
+        selection-background-color: #27ae60;
+    }
+    QHeaderView::section {
+        background-color: #2c3e50;
+        color: #ecf0f1;
+        padding: 5px;
+        border: 1px solid #7f8c8d;
+        font-weight: bold;
+    }
+    /* Button Styling */
+    QPushButton {
+        background-color: #2980b9;
+        border: none;
+        border-radius: 4px;
+        padding: 8px 16px;
+        font-weight: bold;
+        color: white;
+    }
+    QPushButton:hover {
+        background-color: #3498db;
+    }
+    QPushButton#add_device_btn {
+        background-color: #27ae60;
+    }
+    QPushButton#add_device_btn:hover {
+        background-color: #2ecc71;
+    }
+    QPushButton#manage_clients_btn {
+        background-color: #e67e22;
+    }
+    QPushButton#manage_clients_btn:hover {
+        background-color: #d35400;
+    }
+   </string>
+  </property>
+  <widget class="QWidget" name="centralwidget">
+   <layout class="QVBoxLayout" name="verticalLayout">
+    <item>
+     <layout class="QHBoxLayout" name="top_bar_layout">
+      <item>
+       <widget class="QLabel" name="label">
+        <property name="font">
+         <font>
+          <pointsize>16</pointsize>
+          <bold>true</bold>
+         </font>
+        </property>
+        <property name="text">
+         <string>Device List</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <spacer name="horizontalSpacer">
+        <property name="orientation">
+         <enum>Qt::Horizontal</enum>
+        </property>
+        <property name="sizeHint" stdset="0">
+         <size>
+          <width>40</width>
+          <height>20</height>
+         </size>
+        </property>
+       </spacer>
+      </item>
+      <item>
+       <widget class="QPushButton" name="manage_clients_btn">
+        <property name="text">
+         <string>Manage Clients</string>
+        </property>
+        <property name="cursor">
+         <cursorShape>PointingHandCursor</cursorShape>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QPushButton" name="refresh_btn">
+        <property name="text">
+         <string>Refresh List</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QPushButton" name="add_device_btn">
+        <property name="text">
+         <string>+ Add New Device</string>
+        </property>
+        <property name="cursor">
+         <cursorShape>PointingHandCursor</cursorShape>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </item>
+    <item>
+     <widget class="QTableWidget" name="device_table">
+      <property name="alternatingRowColors">
+       <bool>true</bool>
+      </property>
+      <property name="selectionBehavior">
+       <enum>QAbstractItemView::SelectRows</enum>
+      </property>
+      <property name="selectionMode">
+       <enum>QAbstractItemView::SingleSelection</enum>
+      </property>
+      <attribute name="horizontalHeaderStretchLastSection">
+       <bool>true</bool>
+      </attribute>
+      <column>
+       <property name="text">
+        <string>Serial Number</string>
+       </property>
+      </column>
+      <column>
+       <property name="text">
+        <string>Model</string>
+       </property>
+      </column>
+      <column>
+       <property name="text">
+        <string>Init Date</string>
+       </property>
+      </column>
+      <column>
+       <property name="text">
+        <string>Client</string>
+       </property>
+      </column>
+     </widget>
+    </item>
+    <item>
+     <layout class="QHBoxLayout" name="action_bar_layout">
+      <item>
+       <widget class="QPushButton" name="edit_device_btn">
+        <property name="text">
+         <string>Edit Selected</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QPushButton" name="add_service_btn">
+        <property name="text">
+         <string>Add Service</string>
+        </property>
+        <property name="styleSheet">
+            <string>background-color: #8e44ad;</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <spacer name="horizontalSpacer_2">
+        <property name="orientation">
+         <enum>Qt::Horizontal</enum>
+        </property>
+        <property name="sizeHint" stdset="0">
+         <size>
+          <width>40</width>
+          <height>20</height>
+         </size>
+        </property>
+       </spacer>
+      </item>
+     </layout>
+    </item>
+   </layout>
+  </widget>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>

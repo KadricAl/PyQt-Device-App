@@ -1,9 +1,10 @@
 import sys
 from PyQt6.QtWidgets import (QApplication, QMainWindow, QDialog, QLabel, 
                              QLineEdit, QPushButton, QComboBox, QTableWidget, 
-                             QTableWidgetItem, QDateEdit, QMessageBox)
+                             QTableWidgetItem, QDateEdit, QMessageBox, QTextEdit, 
+                             QFormLayout, QVBoxLayout, QHBoxLayout, QHeaderView)
 from PyQt6 import uic
-from PyQt6.QtCore import QDate
+from PyQt6.QtCore import QDate, Qt
 import database as db
 
 # --- REGISTER WINDOW ---
@@ -81,13 +82,13 @@ class LoginWindow(QMainWindow):
         self.main_win.show()
         self.close()
 
-# --- ADD DEVICE DIALOG ---
-class AddDeviceDialog(QDialog):
-    def __init__(self):
+# --- ADD / EDIT DEVICE DIALOG ---
+class DeviceDialog(QDialog):
+    def __init__(self, edit_data=None):
         super().__init__()
         uic.loadUi('add_device.ui', self)
+        self.edit_mode_serial = edit_data[0] if edit_data else None
         
-        # Find Widgets
         self.serial_input = self.findChild(QLineEdit, 'serial_input')
         self.model_input = self.findChild(QLineEdit, 'model_input')
         self.date_input = self.findChild(QDateEdit, 'date_input')
@@ -95,41 +96,139 @@ class AddDeviceDialog(QDialog):
         self.save_button = self.findChild(QPushButton, 'save_button')
         self.cancel_button = self.findChild(QPushButton, 'cancel_button')
 
-        # Set Date to current date
-        self.date_input.setDate(QDate.currentDate())
-        
-        # Populate Client ComboBox
         self.populate_clients()
+
+        if edit_data:
+            self.setWindowTitle("Edit Device")
+            self.serial_input.setText(edit_data[0])
+            self.model_input.setText(edit_data[1])
+            self.date_input.setDate(QDate.fromString(edit_data[2], "yyyy-MM-dd"))
+            self.client_combo.setCurrentText(edit_data[3])
+        else:
+            self.setWindowTitle("Add New Device")
+            self.date_input.setDate(QDate.currentDate())
         
         self.save_button.clicked.connect(self.save_device)
-        self.cancel_button.clicked.connect(self.reject) # Closes dialog
+        self.cancel_button.clicked.connect(self.reject)
         
     def populate_clients(self):
         clients = db.get_all_clients()
+        self.client_combo.clear()
         self.client_combo.addItems(clients)
         
     def save_device(self):
         serial = self.serial_input.text()
         model = self.model_input.text()
-        date = self.date_input.text() # returns string "yyyy-MM-dd" due to ui format
+        date = self.date_input.date().toString("yyyy-MM-dd")
         client = self.client_combo.currentText()
         
         if not serial or not model or not client:
             QMessageBox.warning(self, "Validation Error", "Please fill in all fields.")
             return
 
-        if db.add_device(serial, model, date, client):
-            self.accept() # Closes dialog with Success result
+        if self.edit_mode_serial:
+            success = db.update_device(self.edit_mode_serial, serial, model, date, client)
         else:
-            QMessageBox.critical(self, "Error", "Could not save device.")
+            success = db.add_device(serial, model, date, client)
 
-# --- CLIENT FORM DIALOG ---
+        if success:
+            self.accept()
+        else:
+            QMessageBox.critical(self, "Error", "Could not save device details.")
+
+# --- SERVICE HISTORY DIALOG ---
+class ServiceHistoryDialog(QDialog):
+    def __init__(self, device_serial):
+        super().__init__()
+        uic.loadUi('service_history.ui', self)
+        self.setWindowTitle(f"Service History: {device_serial}")
+        
+        self.history_table = self.findChild(QTableWidget, 'history_table')
+        self.close_btn = self.findChild(QPushButton, 'close_button')
+        
+        # Configure table behavior
+        self.history_table.setColumnCount(4)
+        self.history_table.setHorizontalHeaderLabels(["Start Date", "End Date", "Type", "Description"])
+        self.history_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        self.history_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        
+        self.close_btn.clicked.connect(self.accept)
+        self.load_history(device_serial)
+
+    def load_history(self, serial):
+        if hasattr(db, 'get_service_history'):
+            records = db.get_service_history(serial)
+            self.history_table.setRowCount(0)
+            for row_idx, record in enumerate(records):
+                self.history_table.insertRow(row_idx)
+                for col_idx, value in enumerate(record):
+                    self.history_table.setItem(row_idx, col_idx, QTableWidgetItem(str(value)))
+        else:
+            QMessageBox.warning(self, "Database Error", "get_service_history function not found.")
+
+# --- SERVICE DIALOG ---
+class ServiceDialog(QDialog):
+    def __init__(self, device_serial):
+        super().__init__()
+        self.device_serial = device_serial
+        
+        # Crucial: Load UI FIRST
+        uic.loadUi('service_dialog.ui', self)
+        self.setWindowTitle(f"Service: {device_serial}")
+        
+        # Link widgets using names from your service_dialog.ui
+        self.start_date = self.findChild(QDateEdit, 'start_date_input')
+        self.end_date = self.findChild(QDateEdit, 'end_date_input')
+        self.service_type = self.findChild(QComboBox, 'type_combo')
+        self.description = self.findChild(QTextEdit, 'desc_input')
+        self.save_btn = self.findChild(QPushButton, 'save_button')
+        self.cancel_btn = self.findChild(QPushButton, 'cancel_button')
+        self.history_btn = self.findChild(QPushButton, 'history_button')
+
+        # Setup initial values (respecting UI file settings)
+        self.start_date.setDate(QDate.currentDate())
+        self.end_date.setDate(QDate.currentDate())
+        
+        if self.service_type.count() == 0:
+            self.service_type.addItems(["Requested", "Maintenance", "Unknown", "Yearly service"])
+
+        # Signal connections
+        self.save_btn.clicked.connect(self.handle_save)
+        self.cancel_btn.clicked.connect(self.reject)
+        self.history_btn.clicked.connect(self.show_history)
+
+    def show_history(self):
+        history_dialog = ServiceHistoryDialog(self.device_serial)
+        history_dialog.exec()
+
+    def handle_save(self):
+        data = {
+            "serial": self.device_serial,
+            "start": self.start_date.date().toString("yyyy-MM-dd"),
+            "end": self.end_date.date().toString("yyyy-MM-dd"),
+            "type": self.service_type.currentText(),
+            "desc": self.description.toPlainText()
+        }
+        
+        if not data["desc"]:
+            QMessageBox.warning(self, "Validation", "Please provide a description.")
+            return
+
+        if hasattr(db, 'add_service'):
+            if db.add_service(data["serial"], data["start"], data["end"], data["type"], data["desc"]):
+                QMessageBox.information(self, "Success", "Service recorded successfully.")
+                self.accept()
+            else:
+                QMessageBox.critical(self, "Error", "Failed to save service.")
+        else:
+            QMessageBox.critical(self, "Error", "Database function 'add_service' missing.")
+
+# --- CLIENTS MANAGER ---
 class ClientForm(QDialog):
     def __init__(self, client_id=None, username=None):
         super().__init__()
         uic.loadUi('client_form.ui', self)
         self.client_id = client_id
-        
         self.username_input = self.findChild(QLineEdit, 'username_input')
         self.password_input = self.findChild(QLineEdit, 'password_input')
         self.save_button = self.findChild(QPushButton, 'save_button')
@@ -147,28 +246,23 @@ class ClientForm(QDialog):
     def save_client(self):
         username = self.username_input.text()
         password = self.password_input.text()
-        
         if not username:
             QMessageBox.warning(self, "Validation", "Username is required.")
             return
-
         if self.client_id:
-            # Update existing
             if db.update_client(self.client_id, username, password if password else None):
                 self.accept()
             else:
-                QMessageBox.critical(self, "Error", "Failed to update client. Username might be taken.")
+                QMessageBox.critical(self, "Error", "Failed to update client.")
         else:
-            # Add new
             if not password:
                 QMessageBox.warning(self, "Validation", "Password is required for new clients.")
                 return
             if db.add_user(username, password, "Client"):
                 self.accept()
             else:
-                QMessageBox.critical(self, "Error", "Failed to add client. Username likely taken.")
+                QMessageBox.critical(self, "Error", "Failed to add client.")
 
-# --- CLIENTS MANAGER WINDOW ---
 class ClientsManager(QDialog):
     def __init__(self):
         super().__init__()
@@ -177,15 +271,13 @@ class ClientsManager(QDialog):
         self.add_btn = self.findChild(QPushButton, 'add_client_btn')
         self.edit_btn = self.findChild(QPushButton, 'edit_client_btn')
         self.delete_btn = self.findChild(QPushButton, 'delete_client_btn')
-        
         self.add_btn.clicked.connect(self.add_client)
         self.edit_btn.clicked.connect(self.edit_client)
         self.delete_btn.clicked.connect(self.delete_client)
-        
         self.load_clients()
 
     def load_clients(self):
-        clients = db.get_clients_list() # returns [(id, username, role), ...]
+        clients = db.get_clients_list()
         self.clients_table.setRowCount(0)
         for row_idx, client_data in enumerate(clients):
             self.clients_table.insertRow(row_idx)
@@ -193,43 +285,20 @@ class ClientsManager(QDialog):
                 self.clients_table.setItem(row_idx, col_idx, QTableWidgetItem(str(data)))
 
     def add_client(self):
-        dialog = ClientForm()
-        if dialog.exec():
-            self.load_clients()
+        if ClientForm().exec(): self.load_clients()
 
     def edit_client(self):
-        selected = self.clients_table.selectedItems()
-        if not selected:
-            QMessageBox.information(self, "Info", "Select a client to edit.")
-            return
-        
         row = self.clients_table.currentRow()
+        if row < 0: return
         c_id = self.clients_table.item(row, 0).text()
         c_name = self.clients_table.item(row, 1).text()
-        
-        dialog = ClientForm(client_id=c_id, username=c_name)
-        if dialog.exec():
-            self.load_clients()
+        if ClientForm(client_id=c_id, username=c_name).exec(): self.load_clients()
 
     def delete_client(self):
-        selected = self.clients_table.selectedItems()
-        if not selected:
-            QMessageBox.information(self, "Info", "Select a client to delete.")
-            return
-            
         row = self.clients_table.currentRow()
+        if row < 0: return
         c_id = self.clients_table.item(row, 0).text()
-        c_name = self.clients_table.item(row, 1).text()
-        
-        confirm = QMessageBox.question(self, "Confirm Delete", 
-                                     f"Are you sure you want to delete client '{c_name}'?",
-                                     QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
-        
-        if confirm == QMessageBox.StandardButton.Yes:
-            if db.delete_client(c_id):
-                self.load_clients()
-            else:
-                QMessageBox.critical(self, "Error", "Could not delete client.")
+        if db.delete_client(c_id): self.load_clients()
 
 # --- MAIN WINDOW ---
 class MainWindow(QMainWindow):
@@ -239,72 +308,64 @@ class MainWindow(QMainWindow):
         self.current_user = username
         self.current_role = role
         
-        # Find Widgets
         self.device_table = self.findChild(QTableWidget, 'device_table')
         self.add_device_btn = self.findChild(QPushButton, 'add_device_btn')
-        self.manage_clients_btn = self.findChild(QPushButton, 'manage_clients_btn') # New Button
+        self.manage_clients_btn = self.findChild(QPushButton, 'manage_clients_btn')
         self.refresh_btn = self.findChild(QPushButton, 'refresh_btn')
         self.edit_device_btn = self.findChild(QPushButton, 'edit_device_btn')
         self.add_service_btn = self.findChild(QPushButton, 'add_service_btn')
         
-        # Hide "Manage Clients" if user is not a Technician
         if self.current_role != 'Technician':
             self.manage_clients_btn.hide()
 
-        # Connect Signals
         self.add_device_btn.clicked.connect(self.open_add_device_dialog)
-        self.manage_clients_btn.clicked.connect(self.open_clients_manager) # New Connection
+        self.manage_clients_btn.clicked.connect(self.open_clients_manager)
         self.refresh_btn.clicked.connect(self.load_devices)
         self.edit_device_btn.clicked.connect(self.edit_selected_device)
         self.add_service_btn.clicked.connect(self.add_service_to_device)
         
-        # Initial Load
-        self.load_devices()
-
-    def open_clients_manager(self):
-        manager = ClientsManager()
-        manager.exec()
-        # Refresh device list in case clients were changed/removed impacting the view
         self.load_devices()
 
     def load_devices(self):
-        """Fetches devices from DB and populates the table."""
-        devices = db.get_devices() # Returns list of tuples (serial, model, date, client)
-        
-        self.device_table.setRowCount(0) # Clear table
-        
+        devices = db.get_devices()
+        self.device_table.setRowCount(0)
         for row_idx, device_data in enumerate(devices):
             self.device_table.insertRow(row_idx)
             for col_idx, data in enumerate(device_data):
-                item = QTableWidgetItem(str(data))
-                self.device_table.setItem(row_idx, col_idx, item)
+                self.device_table.setItem(row_idx, col_idx, QTableWidgetItem(str(data)))
 
     def open_add_device_dialog(self):
-        dialog = AddDeviceDialog()
-        if dialog.exec(): # Returns True if self.accept() was called in dialog
-            self.load_devices() # Refresh table after adding
-            
+        if DeviceDialog().exec():
+            self.load_devices()
+
     def edit_selected_device(self):
-        selected_items = self.device_table.selectedItems()
-        if not selected_items:
+        row = self.device_table.currentRow()
+        if row < 0:
             QMessageBox.information(self, "Info", "Please select a device to edit.")
             return
         
-        # Logic for editing would go here (e.g., open a dialog pre-filled with row data)
-        # For now, we just get the Serial Number (column 0)
-        row = self.device_table.currentRow()
         serial = self.device_table.item(row, 0).text()
-        print(f"Edit requested for Serial: {serial}")
+        model = self.device_table.item(row, 1).text()
+        date = self.device_table.item(row, 2).text()
+        client = self.device_table.item(row, 3).text()
         
+        dialog = DeviceDialog(edit_data=(serial, model, date, client))
+        if dialog.exec():
+            self.load_devices()
+
+    def open_clients_manager(self):
+        ClientsManager().exec()
+        self.load_devices()
+
     def add_service_to_device(self):
-        selected_items = self.device_table.selectedItems()
-        if not selected_items:
-            QMessageBox.information(self, "Info", "Please select a device to add service to.")
+        row = self.device_table.currentRow()
+        if row < 0:
+            QMessageBox.information(self, "Info", "Please select a device to add a service record.")
             return
             
-        row = self.device_table.currentRow()
         serial = self.device_table.item(row, 0).text()
-        print(f"Add Service requested for Serial: {serial}")
+        dialog = ServiceDialog(serial)
+        dialog.exec()
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)

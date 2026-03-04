@@ -28,15 +28,27 @@ def create_tables():
             ''')
             
             # Devices Table
-            # client_id links to the users table
             cursor.execute('''
                 CREATE TABLE IF NOT EXISTS devices (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    serial_number TEXT NOT NULL,
+                    serial_number TEXT NOT NULL UNIQUE,
                     model TEXT NOT NULL,
                     init_date TEXT,
                     client_id INTEGER,
                     FOREIGN KEY (client_id) REFERENCES users (id)
+                );
+            ''')
+
+            # Services Table
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS services (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    device_serial TEXT NOT NULL,
+                    start_date TEXT,
+                    end_date TEXT,
+                    service_type TEXT,
+                    description TEXT,
+                    FOREIGN KEY (device_serial) REFERENCES devices (serial_number)
                 );
             ''')
             
@@ -148,8 +160,6 @@ def delete_client(user_id):
     if conn is None: return False
     try:
         cursor = conn.cursor()
-        # Optional: Delete devices associated with client first if you want to enforce cleanup
-        # cursor.execute("DELETE FROM devices WHERE client_id = ?", (user_id,))
         cursor.execute("DELETE FROM users WHERE id = ?", (user_id,))
         conn.commit()
         return True
@@ -180,13 +190,32 @@ def add_device(serial, model, init_date, client_username):
     finally:
         conn.close()
 
+def update_device(old_serial, new_serial, model, init_date, client_username):
+    """Updates an existing device's information."""
+    conn = connect_db()
+    if conn is None: return False
+    try:
+        client_id = get_user_id(client_username)
+        cursor = conn.cursor()
+        cursor.execute('''
+            UPDATE devices 
+            SET serial_number = ?, model = ?, init_date = ?, client_id = ?
+            WHERE serial_number = ?
+        ''', (new_serial, model, init_date, client_id, old_serial))
+        conn.commit()
+        return True
+    except sqlite3.Error as e:
+        print(f"Error updating device: {e}")
+        return False
+    finally:
+        conn.close()
+
 def get_devices():
     """Fetches all devices with their associated client username."""
     conn = connect_db()
     if conn is None: return []
     try:
         cursor = conn.cursor()
-        # Join devices with users to get the client name instead of just ID
         query = '''
             SELECT d.serial_number, d.model, d.init_date, u.username 
             FROM devices d
@@ -196,6 +225,43 @@ def get_devices():
         return cursor.fetchall()
     except sqlite3.Error as e:
         print(f"Error fetching devices: {e}")
+        return []
+    finally:
+        conn.close()
+
+def add_service(serial, start, end, service_type, description):
+    """Adds a new service record for a specific device."""
+    conn = connect_db()
+    if conn is None: return False
+    try:
+        cursor = conn.cursor()
+        cursor.execute('''
+            INSERT INTO services (device_serial, start_date, end_date, service_type, description)
+            VALUES (?, ?, ?, ?, ?)
+        ''', (serial, start, end, service_type, description))
+        conn.commit()
+        return True
+    except sqlite3.Error as e:
+        print(f"Error adding service: {e}")
+        return False
+    finally:
+        conn.close()
+
+def get_service_history(serial):
+    """Fetches service history for a specific device."""
+    conn = connect_db()
+    if conn is None: return []
+    try:
+        cursor = conn.cursor()
+        cursor.execute('''
+            SELECT start_date, end_date, service_type, description 
+            FROM services 
+            WHERE device_serial = ?
+            ORDER BY start_date DESC
+        ''', (serial,))
+        return cursor.fetchall()
+    except sqlite3.Error as e:
+        print(f"Error fetching service history: {e}")
         return []
     finally:
         conn.close()

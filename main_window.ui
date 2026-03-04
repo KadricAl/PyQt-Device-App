@@ -25,6 +25,7 @@
     /* Table Styling */
     QTableWidget {
         background-color: #34495e;
+        alternate-background-color: #7f8c8d;
         gridline-color: #7f8c8d;
         color: #ecf0f1;
         border: none;
@@ -173,7 +174,8 @@
          <string>Add Service</string>
         </property>
         <property name="styleSheet">
-            <string>background-color: #8e44ad;</string>
+            <string>background-color: #27ae60;
+            </string>
         </property>
        </widget>
       </item>
